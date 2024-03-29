@@ -1,1 +1,0 @@
-/Users/m3hrad/Projects/rust_test/add/target/debug/adder: /Users/m3hrad/Projects/rust_test/add/add_one/src/lib.rs /Users/m3hrad/Projects/rust_test/add/adder/src/main.rs /Users/m3hrad/Projects/rust_test/add/con_list/src/lib.rs
