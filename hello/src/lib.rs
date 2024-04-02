@@ -5,7 +5,7 @@ use std::{
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: Option<mpsc::Sender<Job>>,
 }
 
 #[derive(Debug)]
@@ -35,7 +35,7 @@ impl ThreadPool {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
 
-        ThreadPool { workers, sender }
+        ThreadPool { workers, sender: Some(sender) }
     }
 
     pub fn build(size: usize) -> Result<ThreadPool, PoolCreationError> {
@@ -50,7 +50,7 @@ impl ThreadPool {
                 workers.push(Worker::new(id, Arc::clone(&receiver)));
             }
 
-            Ok(ThreadPool { workers, sender })
+            Ok(ThreadPool { workers, sender: Some(sender) })
         } else {
             Err(PoolCreationError)
         }
@@ -62,29 +62,59 @@ impl ThreadPool {
     {
         let job = Box::new(f);
 
-        self.sender.send(job).unwrap();
+        // if let Some(sender) = &self.sender {
+        //     sender.send(job).unwrap();
+        // }
+
+        self.sender.as_ref().unwrap().send(job).unwrap();
     }
 }
 
 struct Worker {
     id: usize,
-    thread: thread::JoinHandle<ArcJob>,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Worker {
-    fn new(id: usize, receiver: ArcJob) -> Worker {
+    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
         let lock_error = "Failed to lock receiver mutex";
-        let recv_error = "Failed to receive job from channel";
+
         let thread = thread::spawn(
             move || loop { //while let (and if let and match) does not drop temporary values until the end of the associated block
-                let job = receiver.lock().expect(lock_error).recv().expect(recv_error);
+                let message = receiver.lock().expect(lock_error).recv();
+                match message {
+                    Ok(job) => {
+                        println!("Worker {} got a job; executing.", id);
+                        job();
+                    },
+                    Err(_) => {
+                        println!("Worker {} got a termination signal; shutting down.", id);
+                        break;
+                    }
+                }
 
-                println!("Worker {} got a job; executing.", id);
-
-                job();
             }
         );
 
-        Worker { id, thread }
+        Worker { id, thread: Some(thread) }
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+
+        // if let Some(sender) = self.sender.take() {
+        //     drop(sender);
+        // }
+
+        drop(self.sender.take());
+    
+        for worker in &mut self.workers {
+            println!("Shutting down worker {}", worker.id);
+
+            if let Some(thread) = worker.thread.take() {
+                thread.join().unwrap();
+            }
+        }
     }
 }
