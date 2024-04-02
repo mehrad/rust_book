@@ -18,7 +18,6 @@ impl std::fmt::Display for PoolCreationError {
 }
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
-type ArcJob = Arc<Mutex<mpsc::Receiver<Job>>>;
 
 impl ThreadPool {
     pub fn new(size: usize) -> ThreadPool {
