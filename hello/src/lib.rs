@@ -27,14 +27,16 @@ impl ThreadPool {
 
         let receiver = Arc::new(Mutex::new(receiver));
 
-
         let mut workers = Vec::with_capacity(size);
 
         for id in 0..size {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
 
-        ThreadPool { workers, sender: Some(sender) }
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
     }
 
     pub fn build(size: usize) -> Result<ThreadPool, PoolCreationError> {
@@ -49,7 +51,10 @@ impl ThreadPool {
                 workers.push(Worker::new(id, Arc::clone(&receiver)));
             }
 
-            Ok(ThreadPool { workers, sender: Some(sender) })
+            Ok(ThreadPool {
+                workers,
+                sender: Some(sender),
+            })
         } else {
             Err(PoolCreationError)
         }
@@ -78,36 +83,36 @@ impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
         let lock_error = "Failed to lock receiver mutex";
 
-        let thread = thread::spawn(
-            move || loop { //while let (and if let and match) does not drop temporary values until the end of the associated block
-                let message = receiver.lock().expect(lock_error).recv();
-                match message {
-                    Ok(job) => {
-                        println!("Worker {} got a job; executing.", id);
-                        job();
-                    },
-                    Err(_) => {
-                        println!("Worker {} got a termination signal; shutting down.", id);
-                        break;
-                    }
+        let thread = thread::spawn(move || loop {
+            //while let (and if let and match) does not drop temporary values until the end of the associated block
+            let message = receiver.lock().expect(lock_error).recv();
+            match message {
+                Ok(job) => {
+                    println!("Worker {} got a job; executing.", id);
+                    job();
                 }
-
+                Err(_) => {
+                    println!("Worker {} got a termination signal; shutting down.", id);
+                    break;
+                }
             }
-        );
+        });
 
-        Worker { id, thread: Some(thread) }
+        Worker {
+            id,
+            thread: Some(thread),
+        }
     }
 }
 
 impl Drop for ThreadPool {
     fn drop(&mut self) {
-
         // if let Some(sender) = self.sender.take() {
         //     drop(sender);
         // }
 
         drop(self.sender.take());
-    
+
         for worker in &mut self.workers {
             println!("Shutting down worker {}", worker.id);
 
